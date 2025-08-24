@@ -1,0 +1,158 @@
+[
+    {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+            "order"
+        ],
+        "properties": {
+            "order": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/properties/orderItem"
+                }
+            },
+            "orderItem": {
+                "type": "object",
+                "required": [
+                    "text",
+                    "bbox"
+                ],
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    },
+                    "bbox": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "items": []
+    },
+    {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Receipt Analysis",
+        "type": "object",
+        "properties": {
+            "receipt_date": {
+                "type": "string"
+            },
+            "restaurant_name": {
+                "type": "string"
+            },
+            "location": {
+                "type": "string"
+            },
+            "server": {
+                "type": "string"
+            },
+            "guests": {
+                "type": "integer"
+            },
+            "total_price": {
+                "type": "number"
+            },
+            "balance_due": {
+                "type": "number"
+            }
+        },
+        "required": [
+            "receipt_date",
+            "restaurant_name",
+            "location",
+            "server",
+            "guests",
+            "total_price",
+            "balance_due"
+        ],
+        "items": []
+    },
+    {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "$id": "restaurant-receipt-analysis",
+        "type": "object",
+        "required": [
+            "receipt"
+        ],
+        "properties": {
+            "receipt": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/receipt-item"
+                }
+            }
+        },
+        "definitions": {
+            "receipt-item": {
+                "type": "object",
+                "required": [
+                    "text",
+                    "bbox"
+                ],
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    },
+                    "bbox": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/bbox-coordinate"
+                        }
+                    }
+                }
+            },
+            "bbox-coordinate": {
+                "type": "array",
+                "items": [
+                    {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                ]
+            }
+        },
+        "items": []
+    },
+    {
+        "store_name": "JT's Diner",
+        "date": "02/12/2016",
+        "total": 28.4,
+        "items": [
+            {
+                "description": "Coffee (2 @2.95)",
+                "quantity": 2,
+                "total_price": 5.9,
+                "category": 4
+            },
+            {
+                "description": "Two Eggs Any Style",
+                "quantity": null,
+                "total_price": 6.95,
+                "category": 4
+            },
+            {
+                "description": "Whole-Wheat Pancakes",
+                "quantity": null,
+                "total_price": 8.95,
+                "category": 4
+            },
+            {
+                "description": "Hawaiian Sausage",
+                "quantity": null,
+                "total_price": 4.5,
+                "category": 4
+            }
+        ]
+    }
+]
