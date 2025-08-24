@@ -28,28 +28,69 @@ def convert_numpy_types(obj):
     elif isinstance(obj, np.ndarray): return obj.tolist()
     else: return obj
 
+@st.cache_resource
 def manage_ollama():
-    client = None
-    try:
-        client = ollama.Client(host='127.0.0.1:11434', timeout=2)
-        client.list()
-    except Exception:
-        print("Ollama server not found. Starting it in the background...")
+    """
+    Installs Ollama if not present, starts the server, and pulls the required model.
+    This function is cached to run only once per session.
+    """
+    # 1. Check if 'ollama' command exists
+    if not shutil.which('ollama'):
+        st.toast("Ollama not found. Starting one-time installation...")
+        print("Ollama not found. Starting one-time installation...")
+        
+        # Run the installation script
         try:
-            subprocess.Popen(['ollama', 'serve'])
-            st.toast("Starting local LLM server...")
-            time.sleep(5)
-            client = ollama.Client(host='127.0.0.1:11434')
-        except Exception as e:
-            st.error(f"Failed to start Ollama server: {e}")
+            # The command needs to be run in a shell to handle the pipe '|'
+            install_command = "curl -fsSL https://ollama.com/install.sh | sh"
+            subprocess.run(install_command, shell=True, check=True, capture_output=True, text=True)
+            st.toast("Ollama installed successfully!")
+            print("Ollama installed successfully!")
+        except subprocess.CalledProcessError as e:
+            st.error(f"Failed to install Ollama. Error: {e.stderr}")
+            print(f"Failed to install Ollama. Error: {e.stderr}")
             st.stop()
+
+    # 2. Start the Ollama server in the background
+    try:
+        # Use Popen to run the server in the background
+        subprocess.Popen(['ollama', 'serve'])
+        st.toast("Starting local LLM server...")
+        print("Starting local LLM server...")
+    except Exception as e:
+        st.error(f"Failed to start Ollama server: {e}")
+        print(f"Failed to start Ollama server: {e}")
+        st.stop()
+        
+    # 3. Wait for the server to be ready
+    client = None
+    max_wait_time = 60  # Wait for up to 60 seconds
+    start_time = time.time()
+    
+    while time.time() - start_time < max_wait_time:
+        try:
+            client = ollama.Client(host='127.0.0.1:11434', timeout=2)
+            client.list() # Check connection
+            print("Ollama server is running.")
+            break 
+        except Exception:
+            time.sleep(1)
+            print("Waiting for Ollama server to start...")
+            client = None
+            
+    if not client:
+        st.error("Ollama server failed to start within the time limit.")
+        st.stop()
+
+    # 4. Pull the model if it's not available
     try:
         model_name = 'llama3:8b'
         models_response = client.list()
         local_models = [m.get('name') for m in models_response.get('models', []) if m.get('name')]
+        
         if model_name not in local_models:
             st.warning(f"One-time setup: The '{model_name}' model is not found and will be downloaded now. This may take several minutes.")
-            with st.spinner(f"Downloading {model_name}..."):
+            with st.spinner(f"Downloading {model_name}... (This can take >10 minutes)"):
                 ollama.pull(model_name)
             st.success(f"Model '{model_name}' downloaded successfully!")
     except Exception as e:

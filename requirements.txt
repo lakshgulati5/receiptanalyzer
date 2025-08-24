@@ -1,9 +1,10 @@
 streamlit
 pandas
 numpy
-pillow
-opencv-python
+Pillow
 paddleocr
+paddlepaddle
 ollama
 plotly
-paddlepaddle
+opencv-python-headless
+scikit-learn
