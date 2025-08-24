@@ -180,7 +180,7 @@ def parse_text_with_llm(ocr_data_json):
     * If any value is not found, use a null value. Do not guess or hallucinate values.
     """
     try:
-        client = ollama.Client(host='127.0.0.1:11434', timeout=120)
+        client = ollama.Client(host='127.0.0.1:11434', timeout=300)
         response = client.chat(model='llama3:8b', messages=[{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': user_prompt}], format='json')
         raw_response = response['message']['content']
         if raw_response.strip().startswith('{'):
