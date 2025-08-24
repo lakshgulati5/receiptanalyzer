@@ -32,81 +32,59 @@ def convert_numpy_types(obj):
 @st.cache_resource
 def manage_ollama():
     """
-    Manually installs Ollama to a local directory if not present, starts the server, 
-    and pulls the required model. This avoids the need for root permissions.
+    Manually installs and starts Ollama.
+    This is cached and runs only ONCE. All UI calls have been removed.
     """
-    # 1. Define a local directory for the Ollama binary
+    # 1. Define local directory for the Ollama binary
     ollama_dir = os.path.join(os.getcwd(), "ollama_bin")
     ollama_path = os.path.join(ollama_dir, "ollama")
     os.makedirs(ollama_dir, exist_ok=True)
 
     # 2. Add the local directory to the system's PATH
-    # This ensures that the `ollama` command can be found by subprocess
     os.environ["PATH"] = f"{ollama_dir}:{os.environ['PATH']}"
 
-    # 3. Check if 'ollama' is installed locally, if not, download it
+    # 3. Install Ollama if not present
     if not os.path.exists(ollama_path):
-        st.toast("Ollama not found. Starting one-time local installation...")
         print("Ollama not found locally. Starting one-time download...")
-        
         try:
-            # Download the Ollama binary for Linux
             ollama_url = "https://github.com/ollama/ollama/releases/download/v0.2.5/ollama-linux-amd64"
             download_path = os.path.join(ollama_dir, "ollama-linux-amd64")
-
-            with st.spinner("Downloading Ollama binary..."):
-                subprocess.run(
-                    ["curl", "-L", ollama_url, "-o", download_path], 
-                    check=True
-                )
             
-            # Rename and make the binary executable
+            subprocess.run(["curl", "-L", ollama_url, "-o", download_path], check=True)
+            
             os.rename(download_path, ollama_path)
-            st.toast("Ollama downloaded. Setting permissions...")
             print("Ollama downloaded. Setting permissions...")
             
-            # Corresponds to `chmod +x ollama`
             current_permissions = os.stat(ollama_path).st_mode
             os.chmod(ollama_path, current_permissions | stat.S_IEXEC)
-
-            st.toast("Ollama installed locally successfully!")
+            
             print("Ollama installed locally successfully!")
-
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            st.error(f"Failed to install Ollama. Error: {e}")
+        except Exception as e:
             print(f"Failed to install Ollama. Error: {e}")
             st.stop()
 
-    # The rest of the function remains the same as before...
-    
-    # 4. Start the Ollama server in the background
-    try:
-        subprocess.Popen(['ollama', 'serve'])
-        st.toast("Starting local LLM server...")
-        print("Starting local LLM server...")
-    except Exception as e:
-        st.error(f"Failed to start Ollama server: {e}")
-        print(f"Failed to start Ollama server: {e}")
-        st.stop()
+    # 4. Start the Ollama server
+    print("Starting local LLM server...")
+    subprocess.Popen(['ollama', 'serve'])
         
     # 5. Wait for the server to be ready
     client = None
     max_wait_time = 60
     start_time = time.time()
     
+    print("Waiting for Ollama server to start...")
     while time.time() - start_time < max_wait_time:
         try:
             client = ollama.Client(host='127.0.0.1:11434', timeout=2)
             client.list()
             print("Ollama server is running.")
-            break 
+            break
         except Exception:
             time.sleep(1)
-            print("Waiting for Ollama server to start...")
             client = None
             
     if not client:
-        st.error("Ollama server failed to start within the time limit.")
+        print("Ollama server failed to start within the time limit.")
         st.stop()
 
     # 6. Pull the model if it's not available
@@ -116,13 +94,14 @@ def manage_ollama():
         local_models = [m.get('name') for m in models_response.get('models', []) if m.get('name')]
         
         if model_name not in local_models:
-            st.warning(f"One-time setup: The '{model_name}' model is not found and will be downloaded now. This may take several minutes.")
-            with st.spinner(f"Downloading {model_name}... (This can take >10 minutes)"):
-                ollama.pull(model_name)
-            st.success(f"Model '{model_name}' downloaded successfully!")
+            print(f"Model '{model_name}' not found. Downloading now...")
+            ollama.pull(model_name)
+            print(f"Model '{model_name}' downloaded successfully!")
     except Exception as e:
-        st.error(f"Failed to pull the LLM model. Error: {e}")
+        print(f"Failed to pull the LLM model. Error: {e}")
         st.stop()
+    
+    print("Ollama setup complete.")
     
 @st.cache_resource
 def load_model_assets(vectorizer_path, model_path, encoder_path):
