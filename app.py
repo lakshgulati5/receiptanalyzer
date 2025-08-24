@@ -27,34 +27,6 @@ def convert_numpy_types(obj):
     elif isinstance(obj, np.floating): return float(obj)
     elif isinstance(obj, np.ndarray): return obj.tolist()
     else: return obj
-
-def manage_ollama():
-    client = None
-    try:
-        client = ollama.Client(host='127.0.0.1:11434', timeout=2)
-        client.list()
-    except Exception:
-        print("Ollama server not found. Starting it in the background...")
-        try:
-            subprocess.Popen(['ollama', 'serve'])
-            st.toast("Starting local LLM server...")
-            time.sleep(5)
-            client = ollama.Client(host='127.0.0.1:11434')
-        except Exception as e:
-            st.error(f"Failed to start Ollama server: {e}")
-            st.stop()
-    try:
-        model_name = 'llama3:8b'
-        models_response = client.list()
-        local_models = [m.get('name') for m in models_response.get('models', []) if m.get('name')]
-        if model_name not in local_models:
-            st.warning(f"One-time setup: The '{model_name}' model is not found and will be downloaded now. This may take several minutes.")
-            with st.spinner(f"Downloading {model_name}..."):
-                ollama.pull(model_name)
-            st.success(f"Model '{model_name}' downloaded successfully!")
-    except Exception as e:
-        st.error(f"Failed to pull the LLM model. Error: {e}")
-        st.stop()
     
 @st.cache_resource
 def load_model_assets(vectorizer_path, model_path, encoder_path):
@@ -164,7 +136,6 @@ def categorize_items(items_list, vectorizer, model, encoder):
 # ==============================================================================
 st.set_page_config(layout="wide", page_title="Receipt Dashboard")
 st.title("🧾 Receipt Processing & Spending Tracker")
-manage_ollama()
 
 # --- Define Paths ---
 BASE_DIRECTORY = '.' 
@@ -216,8 +187,6 @@ if uploaded_file:
     with open(file_path, "wb") as f: f.write(uploaded_file.getbuffer())
     st.sidebar.image(file_path, caption="Uploaded Receipt")
     if st.sidebar.button("Process Receipt"):
-        
-        # Use a status container to show progress
         status_placeholder = st.empty()
         
         with status_placeholder:
@@ -248,10 +217,10 @@ if uploaded_file:
                     with open(ALL_RECEIPTS_DB, 'w') as f:
                         json.dump(all_receipts_data, f, indent=4)
                     
-                    status_placeholder.empty() # Clear the status message
+                    status_placeholder.empty()
                     st.success("Receipt processed successfully!")
                     st.rerun()
-                    
+
 # --- Main Dashboard ---
 st.header("Spending Dashboard")
 if not all_receipts_data:
