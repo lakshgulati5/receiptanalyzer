@@ -89,20 +89,24 @@ def manage_ollama():
 
     # 6. Pull the model if it's not available
     try:
-        model_name = 'llama3:8b'
+        # Change the model name to the smaller, faster phi3:mini
+        model_name = 'phi3:mini'
         models_response = client.list()
         local_models = [m.get('name') for m in models_response.get('models', []) if m.get('name')]
         
         if model_name not in local_models:
             print(f"Model '{model_name}' not found. Downloading now...")
-            ollama.pull(model_name)
+            
+            long_timeout_client = ollama.Client(host='127.0.0.1:11434', timeout=600)
+            long_timeout_client.pull(model_name)
+
             print(f"Model '{model_name}' downloaded successfully!")
     except Exception as e:
         print(f"Failed to pull the LLM model. Error: {e}")
         st.stop()
     
     print("Ollama setup complete.")
-    
+
 @st.cache_resource
 def load_model_assets(vectorizer_path, model_path, encoder_path):
     with open(vectorizer_path, 'rb') as f: vectorizer = pickle.load(f)
@@ -181,8 +185,12 @@ def parse_text_with_llm(ocr_data_json):
     """
     try:
         client = ollama.Client(host='127.0.0.1:11434', timeout=300)
-        response = client.chat(model='llama3:8b', messages=[{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': user_prompt}], format='json')
+        
+        # Change the model name to the smaller, faster phi3:mini
+        response = client.chat(model='phi3:mini', messages=[{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': user_prompt}], format='json')
+        
         raw_response = response['message']['content']
+        
         if raw_response.strip().startswith('{'):
             parsed_json = json.loads(raw_response)
             return True, parsed_json
@@ -190,7 +198,7 @@ def parse_text_with_llm(ocr_data_json):
             return False, f"LLM did not return a valid JSON object. Raw output: {raw_response}"
     except Exception as e:
         return False, str(e)
-
+    
 def clean_text(text):
     if not isinstance(text, str): return ''
     text = text.strip('"').lower()
