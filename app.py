@@ -40,16 +40,27 @@ def manage_ollama():
         print("Ollama not found. Starting one-time installation...")
         
         # Run the installation script
-        try:
-            # The command needs to be run in a shell to handle the pipe '|'
-            install_command = "curl -fsSL https://ollama.com/install.sh | sh"
-            subprocess.run(install_command, shell=True, check=True, capture_output=True, text=True)
-            st.toast("Ollama installed successfully!")
-            print("Ollama installed successfully!")
-        except subprocess.CalledProcessError as e:
-            st.error(f"Failed to install Ollama. Error: {e.stderr}")
-            print(f"Failed to install Ollama. Error: {e.stderr}")
-            st.stop()
+    try:
+        install_command = "curl -fsSL https://ollama.com/install.sh | sh"
+        # IMPORTANT: We remove 'capture_output=True' to see the logs in real-time
+        result = subprocess.run(
+            install_command, 
+            shell=True, 
+            check=True, 
+            text=True,
+            stdout=subprocess.PIPE, # Still capture for potential use
+            stderr=subprocess.PIPE  # Still capture for potential use
+        ) 
+        print("Ollama installation script stdout:", result.stdout)
+        st.toast("Ollama installed successfully!")
+        print("Ollama installed successfully!")
+    except subprocess.CalledProcessError as e:
+        # This will now print the detailed error from the script
+        print(f"Failed to install Ollama. Return code: {e.returncode}")
+        print(f"Stdout: {e.stdout}")
+        print(f"Stderr: {e.stderr}")
+        st.error(f"Failed to install Ollama. Check the Hugging Face logs for details. Stderr: {e.stderr}")
+        st.stop()
 
     # 2. Start the Ollama server in the background
     try:
