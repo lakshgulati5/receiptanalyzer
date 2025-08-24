@@ -1,5 +1,3 @@
-# app.py (Final Version)
-
 # ==============================================================================
 # 1. SETUP AND IMPORTS
 # ==============================================================================
@@ -72,19 +70,6 @@ def load_ocr_model():
 # ==============================================================================
 # 3. PIPELINE FUNCTIONS
 # ==============================================================================
-def preprocess_image(img_path, out_path, max_side_len=4000):
-    try:
-        with Image.open(img_path) as img:
-            img = ImageOps.exif_transpose(img)
-            width, height = img.size
-            if height > max_side_len or width > max_side_len:
-                img.thumbnail((max_side_len, max_side_len), Image.LANCZOS)
-            img.convert("RGB").save(out_path, "JPEG", quality=95)
-        return True
-    except Exception as e:
-        st.error(f"Critical error during image preprocessing: {e}")
-        return False
-
 def perform_ocr_and_generate_lines(ocr_model, img_path):
     img = cv2.imread(img_path)
     if img is None: return [], None
@@ -103,14 +88,15 @@ def ocr_task_processor(ocr_model, image_path, output_root):
         filename_without_ext = os.path.splitext(os.path.basename(image_path))[0]
         subfolder_path = os.path.join(output_root, f'output_{filename_without_ext}')
         os.makedirs(subfolder_path, exist_ok=True)
-        processed_image_path = os.path.join(subfolder_path, f'{filename_without_ext}_processed.jpg')
-        if not preprocess_image(image_path, processed_image_path):
-            return subfolder_path, "Skipped: Image preprocessing failed"
-        words, image_dims = perform_ocr_and_generate_lines(ocr_model, processed_image_path)
+        
+        words, image_dims = perform_ocr_and_generate_lines(ocr_model, image_path)
+        
         if not words:
             return subfolder_path, "Success (no text found)"
+        
         full_output_filename = os.path.join(subfolder_path, 'full_ocr_output.json')
         with open(full_output_filename, 'w', encoding='utf-8') as f: json.dump(words, f, indent=4)
+        
         return subfolder_path, "Success"
     except Exception as e:
         return None, f"Error on {os.path.basename(image_path)}: {e}"
@@ -164,15 +150,13 @@ def clean_text(text):
     text = re.sub(r'[^a-z\s]', '', text)
     return ' '.join(text.split())
 
-# FIX: This function now returns numerical predictions. The conversion to
-# human-readable text happens later, in the UI display logic.
 def categorize_items(items_list, vectorizer, model, encoder):
     if not items_list: return []
     descriptions = [clean_text(item.get('description', '')) for item in items_list]
     X_tfidf = vectorizer.transform(descriptions)
     predictions_numeric = model.predict(X_tfidf)
     for i, item in enumerate(items_list):
-        item['category'] = int(predictions_numeric[i]) # Ensure it's stored as a simple integer
+        item['category'] = int(predictions_numeric[i])
     return items_list
 
 # ==============================================================================
@@ -216,32 +200,58 @@ if os.path.exists(ALL_RECEIPTS_DB):
 st.sidebar.header("Upload New Receipt")
 uploaded_file = st.sidebar.file_uploader("Choose an image...", type=["png", "jpg", "jpeg"])
 if uploaded_file:
+    # Check image size and stop if it's too large
+    MAX_SIDE_LENGTH = 2048 
+    try:
+        with Image.open(uploaded_file) as img:
+            width, height = img.size
+            if max(width, height) > MAX_SIDE_LENGTH:
+                st.sidebar.error(f"Image is too large. Maximum side length is {MAX_SIDE_LENGTH} pixels.")
+                st.stop()
+    except Exception as e:
+        st.sidebar.error(f"Could not read image file: {e}")
+        st.stop()
+    
     file_path = os.path.join(UPLOAD_FOLDER, uploaded_file.name)
     with open(file_path, "wb") as f: f.write(uploaded_file.getbuffer())
     st.sidebar.image(file_path, caption="Uploaded Receipt")
     if st.sidebar.button("Process Receipt"):
-        with st.spinner('Processing receipt...'):
-            subfolder_path, ocr_status = ocr_task_processor(ocr_model, file_path, OUTPUT_FOLDER)
+        
+        # Use a status container to show progress
+        status_placeholder = st.empty()
+        
+        with status_placeholder:
+            with st.spinner('Running OCR...'):
+                subfolder_path, ocr_status = ocr_task_processor(ocr_model, file_path, OUTPUT_FOLDER)
+            
             if not subfolder_path or "Error" in ocr_status or "Skipped" in ocr_status:
-                st.error(f"OCR Pipeline Failed: {ocr_status}")
+                status_placeholder.error(f"OCR Pipeline Failed: {ocr_status}")
             elif "no text found" in ocr_status:
-                st.warning("OCR was successful, but no text was detected.")
+                status_placeholder.warning("OCR was successful, but no text was detected.")
             else:
-                ocr_input_path = os.path.join(subfolder_path, 'full_ocr_output.json')
-                with open(ocr_input_path, 'r') as f: ocr_data = json.load(f)
-                is_success, extracted_data = parse_text_with_llm(ocr_data)
+                with st.spinner('Extracting data with LLM...'):
+                    ocr_input_path = os.path.join(subfolder_path, 'full_ocr_output.json')
+                    with open(ocr_input_path, 'r') as f: ocr_data = json.load(f)
+                    
+                    is_success, extracted_data = parse_text_with_llm(ocr_data)
+                
                 if not is_success:
-                    st.error(f"LLM data extraction failed: {extracted_data}")
+                    status_placeholder.error(f"LLM data extraction failed: {extracted_data}")
                 else:
-                    items = extracted_data.get("items", [])
-                    extracted_data["items"] = categorize_items(items, vectorizer, model, encoder)
+                    with st.spinner('Categorizing items...'):
+                        items = extracted_data.get("items", [])
+                        extracted_data["items"] = categorize_items(items, vectorizer, model, encoder)
+                    
                     final_data_to_save = convert_numpy_types(extracted_data)
                     all_receipts_data.append(final_data_to_save)
+                    
                     with open(ALL_RECEIPTS_DB, 'w') as f:
                         json.dump(all_receipts_data, f, indent=4)
+                    
+                    status_placeholder.empty() # Clear the status message
                     st.success("Receipt processed successfully!")
                     st.rerun()
-
+                    
 # --- Main Dashboard ---
 st.header("Spending Dashboard")
 if not all_receipts_data:
@@ -255,24 +265,21 @@ else:
             except (ValueError, TypeError):
                 price = 0.0
             
-            # FIX: Convert the numerical category to a human-readable one for the UI
             category_numeric = item.get('category', -1)
-            category_text = "Miscellaneous" # Default category
+            category_text = "Miscellaneous" 
             if isinstance(category_numeric, (int, np.integer)):
-                # Use a try-except block in case the number is out of bounds for the encoder
                 try:
                     category_text = encoder.inverse_transform([category_numeric])[0]
                 except ValueError:
                     pass
             elif isinstance(category_numeric, str):
-                # Handle cases where old data might have text already
                 category_text = category_numeric
 
             all_items.append({
                 'store': receipt.get('store_name', 'N/A'),
                 'date': receipt.get('date', 'N/A'),
                 'description': item.get('description', 'N/A'),
-                'category': category_text, # Use the human-readable text
+                'category': category_text,
                 'price': price
             })
 
@@ -295,7 +302,6 @@ else:
     col1.text(f"Date: {last_receipt.get('date', 'N/A')}")
     col1.text(f"Total: ${last_receipt.get('total', 'N/A')}")
     if last_receipt.get("items"):
-        # Create a new DataFrame for the last receipt's items with human-readable categories
         last_receipt_df_items = []
         for item in last_receipt["items"]:
             category_numeric = item.get('category', -1)
