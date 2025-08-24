@@ -16,6 +16,7 @@ from PIL import Image, ImageOps
 from paddleocr import PaddleOCR
 import ollama
 import plotly.express as px
+import stat
 
 # ==============================================================================
 # 2. HELPER FUNCTIONS
