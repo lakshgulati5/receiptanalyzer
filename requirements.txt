@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+pillow
+opencv-python
+paddleocr
+ollama
+plotly
+paddlepaddle
