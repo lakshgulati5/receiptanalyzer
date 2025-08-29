@@ -22,12 +22,18 @@ import stat
 # 2. HELPER FUNCTIONS
 # ==============================================================================
 def convert_numpy_types(obj):
-    if isinstance(obj, dict): return {k: convert_numpy_types(v) for k, v in obj.items()}
-    elif isinstance(obj, list): return [convert_numpy_types(elem) for elem in obj]
-    elif isinstance(obj, np.integer): return int(obj)
-    elif isinstance(obj, np.floating): return float(obj)
-    elif isinstance(obj, np.ndarray): return obj.tolist()
-    else: return obj
+    if isinstance(obj, dict): 
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list): 
+        return [convert_numpy_types(elem) for elem in obj]
+    elif isinstance(obj, np.integer): 
+        return int(obj)
+    elif isinstance(obj, np.floating): 
+        return float(obj)
+    elif isinstance(obj, np.ndarray): 
+        return obj.tolist()
+    else: 
+        return obj
 
 @st.cache_resource
 def manage_ollama():
@@ -35,15 +41,15 @@ def manage_ollama():
     Manually installs and starts Ollama.
     This is cached and runs only ONCE. All UI calls have been removed.
     """
-    # 1. Define local directory for the Ollama binary
+    # Define local directory for the Ollama binary
     ollama_dir = os.path.join(os.getcwd(), "ollama_bin")
     ollama_path = os.path.join(ollama_dir, "ollama")
     os.makedirs(ollama_dir, exist_ok=True)
 
-    # 2. Add the local directory to the system's PATH
+    # Add the local directory to the system's PATH
     os.environ["PATH"] = f"{ollama_dir}:{os.environ['PATH']}"
 
-    # 3. Install Ollama if not present
+    # Install Ollama if not present
     if not os.path.exists(ollama_path):
         print("Ollama not found locally. Starting one-time download...")
         try:
@@ -63,11 +69,11 @@ def manage_ollama():
             print(f"Failed to install Ollama. Error: {e}")
             st.stop()
 
-    # 4. Start the Ollama server
+    # Start the Ollama server
     print("Starting local LLM server...")
     subprocess.Popen(['ollama', 'serve'])
         
-    # 5. Wait for the server to be ready
+    # Wait for the server to be ready
     client = None
     max_wait_time = 60
     start_time = time.time()
@@ -87,26 +93,22 @@ def manage_ollama():
         print("Ollama server failed to start within the time limit.")
         st.stop()
 
-    # 6. Pull the model if it's not available
+    # Pull the model if it's not available
     try:
-        # Change the model name to the smaller, faster phi3:mini
-        model_name = 'phi3:mini'
+        model_name = 'llama3:8b'
         models_response = client.list()
         local_models = [m.get('name') for m in models_response.get('models', []) if m.get('name')]
         
         if model_name not in local_models:
             print(f"Model '{model_name}' not found. Downloading now...")
-            
-            long_timeout_client = ollama.Client(host='127.0.0.1:11434', timeout=600)
-            long_timeout_client.pull(model_name)
-
+            ollama.pull(model_name)
             print(f"Model '{model_name}' downloaded successfully!")
     except Exception as e:
         print(f"Failed to pull the LLM model. Error: {e}")
         st.stop()
     
     print("Ollama setup complete.")
-
+    
 @st.cache_resource
 def load_model_assets(vectorizer_path, model_path, encoder_path):
     with open(vectorizer_path, 'rb') as f: vectorizer = pickle.load(f)
@@ -123,7 +125,8 @@ def load_ocr_model():
 # ==============================================================================
 def perform_ocr_and_generate_lines(ocr_model, img_path):
     img = cv2.imread(img_path)
-    if img is None: return [], None
+    if img is None: 
+        return [], None
     image_dims = img.shape
     ocr_result = ocr_model.predict(img_path)
     words_with_boxes = []
@@ -185,12 +188,8 @@ def parse_text_with_llm(ocr_data_json):
     """
     try:
         client = ollama.Client(host='127.0.0.1:11434', timeout=300)
-        
-        # Change the model name to the smaller, faster phi3:mini
-        response = client.chat(model='phi3:mini', messages=[{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': user_prompt}], format='json')
-        
+        response = client.chat(model='llama3:8b', messages=[{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': user_prompt}], format='json')
         raw_response = response['message']['content']
-        
         if raw_response.strip().startswith('{'):
             parsed_json = json.loads(raw_response)
             return True, parsed_json
@@ -198,15 +197,17 @@ def parse_text_with_llm(ocr_data_json):
             return False, f"LLM did not return a valid JSON object. Raw output: {raw_response}"
     except Exception as e:
         return False, str(e)
-    
+
 def clean_text(text):
-    if not isinstance(text, str): return ''
+    if not isinstance(text, str): 
+        return ''
     text = text.strip('"').lower()
     text = re.sub(r'[^a-z\s]', '', text)
     return ' '.join(text.split())
 
 def categorize_items(items_list, vectorizer, model, encoder):
-    if not items_list: return []
+    if not items_list: 
+        return []
     descriptions = [clean_text(item.get('description', '')) for item in items_list]
     X_tfidf = vectorizer.transform(descriptions)
     predictions_numeric = model.predict(X_tfidf)
@@ -221,7 +222,7 @@ st.set_page_config(layout="wide", page_title="Receipt Dashboard")
 st.title("🧾 Receipt Processing & Spending Tracker")
 manage_ollama()
 
-# --- Define Paths ---
+# Define Paths 
 BASE_DIRECTORY = '.' 
 MODEL_VECTORIZER_PATH = os.path.join(BASE_DIRECTORY, 'tfidf_vectorizer.pkl')
 MODEL_CLASSIFIER_PATH = os.path.join(BASE_DIRECTORY, 'category_classifier.pkl')
@@ -232,7 +233,7 @@ ALL_RECEIPTS_DB = os.path.join(BASE_DIRECTORY, 'all_receipts.json')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# --- Load Models ---
+# Load Models
 try:
     vectorizer, model, encoder = load_model_assets(MODEL_VECTORIZER_PATH, MODEL_CLASSIFIER_PATH, LABEL_ENCODER_PATH)
     ocr_model = load_ocr_model()
@@ -240,7 +241,7 @@ except FileNotFoundError:
     st.error("Model files not found! Please run the `train_model.py` script once to create them.")
     st.stop()
 
-# --- Load Database ---
+# Load Database
 all_receipts_data = []
 if os.path.exists(ALL_RECEIPTS_DB):
     try:
@@ -251,7 +252,7 @@ if os.path.exists(ALL_RECEIPTS_DB):
         st.warning("Could not read the receipt database. Starting fresh.")
         all_receipts_data = []
 
-# --- Sidebar for Uploading ---
+# Sidebar for Uploading
 st.sidebar.header("Upload New Receipt")
 uploaded_file = st.sidebar.file_uploader("Choose an image...", type=["png", "jpg", "jpeg"])
 if uploaded_file:
@@ -307,7 +308,7 @@ if uploaded_file:
                     st.success("Receipt processed successfully!")
                     st.rerun()
                     
-# --- Main Dashboard ---
+# Main Dashboard 
 st.header("Spending Dashboard")
 if not all_receipts_data:
     st.info("Upload a receipt to see your spending analysis.")
